@@ -1,0 +1,112 @@
+#!/opt/swt/bin/php
+<?php
+// @AUTHOR Evgeny Yakimov (eyakimov)
+define("VERSION", "1.0");
+
+function usage($exec) {
+    echo COLOUR_LIGHT_RED."P".COLOUR_LIGHT_YELLOW."R".COLOUR_LIGHT_GREEN."E".COLOUR_LIGHT_CYAN."T".COLOUR_LIGHT_BLUE."T".COLOUR_LIGHT_MAGENTA."Y".COLOUR_RESET."BAEL"
+        . " " . VERSION." - makes your logs colourful and easy to read" . PHP_EOL
+        . PHP_EOL
+        . "usage: $exec [file]" . PHP_EOL
+        . PHP_EOL
+        . "Examples:". PHP_EOL
+        . PHP_EOL
+        . "  With File:". PHP_EOL
+        . "    $exec /logs/mylog.log". PHP_EOL
+        . PHP_EOL
+        . "  With stdin :". PHP_EOL
+        . "    ./mytask.tsk mytask.cfg | $exec". PHP_EOL
+        . PHP_EOL
+        ;
+}
+
+define ("COLOUR_RESET","\033[39m");
+define ("COLOUR_BLACK","\033[30m");
+define ("COLOUR_RED","\033[31m");
+define ("COLOUR_GREEN","\033[32m");
+define ("COLOUR_YELLOW","\033[33m");
+define ("COLOUR_BLUE","\033[34m");
+define ("COLOUR_MAGENTA","\033[35m");
+define ("COLOUR_CYAN","\033[36m");
+define ("COLOUR_LIGHT_GREY","\033[37m");
+define ("COLOUR_DARK_GREY","\033[90m");
+define ("COLOUR_LIGHT_RED","\033[91m");
+define ("COLOUR_LIGHT_GREEN","\033[92m");
+define ("COLOUR_LIGHT_YELLOW","\033[93m");
+define ("COLOUR_LIGHT_BLUE","\033[94m");
+define ("COLOUR_LIGHT_MAGENTA","\033[95m");
+define ("COLOUR_LIGHT_CYAN","\033[96m");
+define ("COLOUR_WHITE","\033[97m");
+
+define ("FORMAT_RESET","\033[0m");
+define ("FORMAT_BOLD","\033[1m");
+define ("FORMAT_DIM","\033[2m");
+define ("FORMAT_UNDERLINED","\033[4m");
+define ("FORMAT_BLINK","\033[5m");
+define ("FORMAT_INVERSE","\033[7m");
+define ("FORMAT_HIDDEN","\033[8m");
+
+
+function decorateLogType($type, $text) {
+    $type = strtoupper($type);
+    $pad = (strlen($type) < 5) ? str_repeat(" ", 5 - strlen($type)) : "";
+
+    if ($type == "FATAL") {
+        return COLOUR_LIGHT_RED . $text . COLOUR_RESET. $pad;
+    } else     if ($type == "ERROR") {
+        return COLOUR_RED . $text . COLOUR_RESET. $pad;
+    } else     if ($type == "WARN") {
+        return COLOUR_RED . $text . COLOUR_RESET. $pad;
+    } else     if ($type == "INFO") {
+        return COLOUR_WHITE . $text . COLOUR_RESET. $pad;
+    } else     if ($type == "DEBUG") {
+        return COLOUR_CYAN . $text . COLOUR_RESET. $pad;
+    } else     if ($type == "TRACE") {
+        return COLOUR_DARK_GREY . $text . COLOUR_RESET. $pad;
+    }
+    else return $type . $pad;
+}
+
+// If arguments passed, then execute command
+if (strtolower($argv[1]) == "-h" || strtolower($argv[1]) == "--help") {
+    if (realpath($argv[0]) == realpath(exec('which '.escapeshellarg(pathinfo($argv[0],PATHINFO_BASENAME))))) { $argv[0] = pathinfo($argv[0],PATHINFO_BASENAME); }
+    usage($argv[0]);
+    exit;
+}
+
+if ($argc > 1) {
+    $handle = fopen($argv[1],"r");
+} else {
+    // else expect input from pipe
+    $handle = fopen('php://stdin', 'r');
+}
+
+
+while (($buffer = fgets($handle)) !== false) {
+    if (!trim($buffer)) continue;
+    // 23APR2014_12:57:58.033 10865:140641818089344 DEBUG /tmp/bde-bb-2.20.0.1/groups/bsi/bsic/bsic_bbhost.cpp:570 BSIC.BBHOST Unloading database. -- FROM TASK
+    // 12MAY2014_07:25:37.626 6324 140411952424704 DEBUG /bb/robobuild/64/cbuild/big2014.19/share/groups/mbs/mbsi/mbsi_eventqueue.cpp 304 MBS.I.EVTQ New event is about to be queued [Event CONNECTION_LOST]  -- FROM GTEST
+    //if (preg_match('%^(\d\d)([A-Z][A-Z][A-Z])(\d\d\d\d)_(\d\d):(\d\d):(\d\d).(\d\d\d)\s(\d+)[:\s](\d+)\s([^\s]*)\s([^:\s]*)[:\s](\d*)\s([^\s]*)\s(.*)$%', $buffer, $matches)) {
+    if (preg_match('%^(\d\d\d\d)\-(\d\d)\-(\d\d)\s(\d\d):(\d\d):(\d\d),(\d\d\d)\s\((\d+)\)\s([^\s]*)\s([^\s]*)\s\[([^:\s]*)[:\s](\d*)\]\s(.*)$%', $buffer, $matches)) {
+        //list (,$day,$month, $year, $hours, $minutes, $seconds, $miliseconds,$pid,$threadid,$logtype,$class,$file,$line,$message) = $matches;
+        list (,$year,$month, $day, $hours, $minutes, $seconds, $miliseconds,$threadid,$logtype,$file,$class,$line,$message) = $matches;
+        //$timestamp = new DateTime("$day $month $year $hours:$minutes:$seconds", new DateTimeZone("UTC"));
+        $timestamp = new DateTime("$year-$month-$day $hours:$minutes:$seconds", new DateTimeZone("UTC"));
+        $outtime = $timestamp->format("Y-m-d H:i:s").'.'.$miliseconds;
+        $maxFile = 35;
+        $file = strlen($file) > $maxFile ? substr($file, -$maxFile) : $file;
+        echo COLOUR_GREEN . $outtime . COLOUR_RESET ." "
+            //.COLOUR_YELLOW . $pid ."." . str_pad($threadid,3,"0",STR_PAD_LEFT) . COLOUR_RESET ." "
+            .COLOUR_YELLOW . str_pad($threadid,3,"0",STR_PAD_LEFT) . COLOUR_RESET ." "
+            .str_pad(decorateLogType($logtype, $logtype),9). " "
+            .COLOUR_MAGENTA . str_pad($file, $maxFile, ".", STR_PAD_LEFT) . COLOUR_RESET .":"
+            .COLOUR_GREEN .str_pad($line, 4) . COLOUR_RESET ." "
+            .decorateLogType($logtype, trim($message)) . PHP_EOL;
+
+            //.COLOUR_WHITE .$class . COLOUR_RESET ." "
+
+    } else {
+        // If we couldnt pretty print it, then just print it
+        echo trim($buffer) . PHP_EOL;
+    }
+}
